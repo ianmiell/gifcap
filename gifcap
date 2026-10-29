@@ -1,0 +1,10 @@
+#!/bin/bash
+# gifcap: drag-select a region of the screen and record it as an animated GIF.
+# Compiles gifcap.swift on first run (and whenever it changes), then runs it.
+# Run `gifcap -h` for options.
+src="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)/gifcap.swift"
+bin="${XDG_CACHE_HOME:-$HOME/.cache}/gifcap/gifcap"
+if [[ ! -x "$bin" || "$src" -nt "$bin" ]]; then
+	mkdir -p "$(dirname "$bin")" && swiftc -O -o "$bin" "$src" || exit 1
+fi
+exec "$bin" "$@"

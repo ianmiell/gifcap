@@ -1,0 +1,52 @@
+#!/bin/bash
+# gifcap-app: build gifcap.app from gifcap.swift, install it and keep it in the Dock.
+# usage: gifcap-app [install-dir]   (default ~/Applications)
+# Launching the app is the same as running `gifcap -r` with no other options.
+# The app is ad-hoc signed, so macOS asks for Screen Recording permission again
+# after every rebuild (remove the old gifcap entry in System Settings if it sticks).
+set -euo pipefail
+here="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+dest="${1:-$HOME/Applications}"
+app="$dest/gifcap.app"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+contents="$tmp/gifcap.app/Contents"
+mkdir -p "$contents/MacOS" "$contents/Resources"
+swiftc -O -o "$contents/MacOS/gifcap" "$here/gifcap.swift"
+swift "$here/gifcap-icon.swift" "$tmp/gifcap.iconset"
+iconutil -c icns -o "$contents/Resources/gifcap.icns" "$tmp/gifcap.iconset"
+cat >"$contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key><string>gifcap</string>
+	<key>CFBundleDisplayName</key><string>gifcap</string>
+	<key>CFBundleIdentifier</key><string>com.ianmiell.gifcap</string>
+	<key>CFBundleExecutable</key><string>gifcap</string>
+	<key>CFBundleIconFile</key><string>gifcap</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>1.0</string>
+	<key>CFBundleVersion</key><string>$(date +%Y%m%d%H%M)</string>
+	<key>LSMinimumSystemVersion</key><string>15.0</string>
+	<key>LSUIElement</key><true/>
+	<key>NSHighResolutionCapable</key><true/>
+	<key>NSScreenCaptureUsageDescription</key><string>gifcap records the region you select as a GIF.</string>
+</dict>
+</plist>
+EOF
+codesign --force --sign - --identifier com.ianmiell.gifcap "$tmp/gifcap.app"
+
+mkdir -p "$dest"
+rm -rf "$app"
+mv "$tmp/gifcap.app" "$app"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app"
+
+if ! defaults read com.apple.dock persistent-apps | grep -q "gifcap.app"; then
+	defaults write com.apple.dock persistent-apps -array-add "<dict><key>tile-data</key><dict><key>file-data</key><dict>
+		<key>_CFURLString</key><string>file://$app/</string><key>_CFURLStringType</key><integer>15</integer>
+		</dict></dict></dict>"
+	killall Dock
+fi
+echo "$app"

@@ -1,0 +1,5 @@
+*.gif
+*.mov
+*.iconset/
+*.app/
+.DS_Store
